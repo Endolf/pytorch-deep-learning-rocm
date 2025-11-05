@@ -1,0 +1,15 @@
+services:
+  pytorch-rocm:
+    container_name: pytorch-rocm
+    image: rocm/pytorch:latest
+    devices:
+      - /dev/dri:/dev/dri
+      - /dev/kfd:/dev/kfd
+    shm_size: 8G
+    group_add:
+      - render
+      - video
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
