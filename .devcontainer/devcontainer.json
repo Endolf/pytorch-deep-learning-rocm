@@ -3,16 +3,10 @@
   "dockerComposeFile": "pytorch-rocm-compose.yaml",
   "service": "pytorch-rocm",
   "onCreateCommand": {
-    "update": "apt update && apt -y upgrade",
-    "installRequirements": "pip install -r requirements.txt"
-  },
-  "postCreateCommand": {
-    "getBaseRequirements": "pip freeze > env-requirements.txt",
-    "createVenv": "python -m venv venv"
+    "update": "apt update && apt -y upgrade"
   },
   "postAttachCommand": {
-    "installEnvRequirements": "source venv/bin/activate && pip install -r env-requirements.txt && rm env-requirements.txt",
-    "installRequirements": "source venv/bin/activate && pip install -r requirements.txt"
+    "setup-env": ".devcontainer/setup-env.sh"
   },
   "customizations": {
     "jetbrains": {
