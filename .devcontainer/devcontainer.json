@@ -6,6 +6,14 @@
     "update": "apt update && apt -y upgrade",
     "installRequirements": "pip install -r requirements.txt"
   },
+  "postCreateCommand": {
+    "getBaseRequirements": "pip freeze > env-requirements.txt",
+    "createVenv": "python -m venv venv"
+  },
+  "postAttachCommand": {
+    "installEnvRequirements": "source venv/bin/activate && pip install -r env-requirements.txt && rm env-requirements.txt",
+    "installRequirements": "source venv/bin/activate && pip install -r requirements.txt"
+  },
   "customizations": {
     "jetbrains": {
       "backend": "PyCharm",
@@ -13,7 +21,7 @@
         "PythonCore", "Pythonid"
       ]
     }
-  },
+  }
   // Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
   // "remoteUser": "root"
 }

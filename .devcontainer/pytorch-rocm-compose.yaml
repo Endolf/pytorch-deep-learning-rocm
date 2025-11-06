@@ -9,7 +9,9 @@ services:
     group_add:
       - render
       - video
+      - kvm
     cap_add:
       - SYS_PTRACE
     security_opt:
       - seccomp:unconfined
+    user: "${UID}:${GID}"
