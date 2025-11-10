@@ -211,3 +211,6 @@ __marimo__/
 
 # Ignore the helper functions py that gets downloaded in the course notebooks
 helper_functions.py
+
+#Ignore downloaded data
+data/
