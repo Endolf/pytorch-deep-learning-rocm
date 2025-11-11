@@ -5,7 +5,6 @@ from torch.utils.data import DataLoader, random_split
 import torchvision
 from torchvision import datasets
 from torchvision import transforms
-from torchvision.transforms import ToTensor
 
 import random
 
@@ -16,6 +15,9 @@ import requests
 from pathlib import Path
 
 from timeit import default_timer as timer
+
+from torchmetrics import ConfusionMatrix
+from mlxtend.plotting import plot_confusion_matrix
 
 print(f"PyTorch version: {torch.__version__}")
 print(f"PyTorch torchvision version: {torchvision.__version__}")
@@ -39,24 +41,25 @@ BATCH_SIZE = 32
 train_dataloader = DataLoader(dataset=train_data, batch_size=BATCH_SIZE, shuffle=True)
 test_dataloader = DataLoader(dataset=test_data, batch_size=BATCH_SIZE, shuffle=False)
 
-test_samples = []
-test_labels = []
-to_pil_image_transformer = transforms.ToPILImage()
+def plot_random_sample(rows: int, cols: int, data: list):
+    test_samples = []
+    test_labels = []
+    to_pil_image_transformer = transforms.ToPILImage()
 
-cols, rows = 5, 5
-for sample, label in random.sample(list(test_data), k=cols*rows):
-    test_samples.append(sample)
-    test_labels.append(label)
+    for sample, label in random.sample(data, k=cols*rows):
+        test_samples.append(sample)
+        test_labels.append(label)
 
-plt.figure(figsize=(10,10))
-for i, sample in enumerate(test_samples):
-    image, label_index = train_data[i]
-    label = dataset.classes[label_index]
-    plt.subplot(rows, cols, i+1)
-    plt.imshow(to_pil_image_transformer(image))
-    plt.title(label, fontsize=8)
-    plt.axis(False)
-plt.show()
+    fig = plt.figure(figsize=(10,10))
+    for i, sample in enumerate(test_samples):
+        image, label_index = train_data[i]
+        label = dataset.classes[label_index]
+        plt.subplot(rows, cols, i+1)
+        plt.imshow(to_pil_image_transformer(image))
+        plt.title(label, fontsize=8)
+        plt.axis(False)
+    fig.tight_layout()
+    plt.show()
 
 device = torch.accelerator.current_accelerator() if torch.accelerator.is_available() else torch.device("cpu")
 print(f"Torch device: {device}")
@@ -100,6 +103,25 @@ def eval_model(model: torch.nn.Module,
         "model_loss": loss.item(),
         "model_acc": acc
     } # only works when the model was created with a class
+
+def make_predictions(model: nn.Module,
+                     data: list,
+                     device: torch.device = device):
+
+    pred_probs = []
+    model.to(device)
+    model.eval()
+    with torch.inference_mode():
+        for sample in tqdm(data, "Making predictions..."):
+            # Add a batch dimension and pass to target device
+            sample = torch.unsqueeze(sample, dim=0).to(device)
+            pred_logit = model(sample)
+
+            pred_prob = torch.softmax(pred_logit.squeeze(), dim=0)
+            pred_probs.append(pred_prob.cpu())
+
+    # Return the prediction probablities as a tensor
+    return torch.stack(pred_probs)
 
 def print_train_time(start: float, end: float, device: torch.device = None):
     """Prints differene between start and end time."""
@@ -215,6 +237,8 @@ class EuroSATModel_0(nn.Module):
         # print(f"Output shape of classifier {x.shape}")
         return x
 
+plot_random_sample(5,5,list(test_data))
+
 torch.manual_seed(42)
 model_0 = EuroSATModel_0(input_shape=3,
                          hidden_units=10,
@@ -224,11 +248,11 @@ model_0 = EuroSATModel_0(input_shape=3,
 loss_fn = nn.CrossEntropyLoss()
 
 # Setup optimiser function
-optimiser = torch.optim.SGD(params=model_0.parameters(), lr=0.02)
+optimiser = torch.optim.SGD(params=model_0.parameters(), lr=0.01)
 
 train_time_start = timer()
 
-EPOCHS = 10
+EPOCHS = 30
 
 for epoch in tqdm(range(EPOCHS)):
     print(f"Epoch: {epoch}")
@@ -249,3 +273,57 @@ model_0_results = eval_model(model=model_0, data_loader=test_dataloader,
                              loss_fn=loss_fn, accuracy_fn=accuracy_fn)
 
 print(f"Model 0 evaluation: {model_0_results}")
+
+test_samples = []
+test_labels = []
+
+cols, rows = 5, 5
+for sample, label in random.sample(list(test_data), k=cols*rows):
+    test_samples.append(sample)
+    test_labels.append(label)
+
+pred_probs = make_predictions(model=model_0, data=test_samples)
+pred_classes = pred_probs.argmax(dim=1)
+
+to_pil_image_transformer = transforms.ToPILImage()
+fig = plt.figure(figsize=(10,10))
+for i, sample in enumerate(test_samples):
+    plt.subplot(rows, cols, i+1)
+    plt.imshow(to_pil_image_transformer(sample.squeeze()))
+    predicted_label = dataset.classes[pred_classes[i]]
+    truth_label = dataset.classes[test_labels[i]]
+    # Set the title to *predicted label (actual label)*
+    if predicted_label == truth_label:
+        colour = "g"
+        title_text = f"{predicted_label}"
+    else:
+        colour = "r"
+        title_text = f"{predicted_label}\n({truth_label})"
+    plt.title(title_text, fontsize="9", c=colour)
+    plt.axis(False)
+fig.tight_layout()
+fig.show()
+
+y_preds = []
+targets = []
+model_0.eval()
+with torch.inference_mode():
+    for X, y in tqdm(test_dataloader, desc="Making predictions..."):
+        X, y = X.to(device), y.to(device)
+        y_logits = model_0(X)
+        #Turn logits to preds to labels
+        y_pred = torch.softmax(y_logits.squeeze(), dim=0).argmax(dim=1)
+        y_preds.append(y_pred.cpu())
+        targets.append(y)
+
+y_pred_tensor = torch.cat(y_preds)
+targets_tensor = torch.cat(targets).to("cpu")
+
+conf_mat = ConfusionMatrix(num_classes=len(dataset.classes), task="multiclass")
+conf_mat_tensor = conf_mat(preds=y_pred_tensor, target=targets_tensor) #test_data.targets are the numerical labels in the test_data
+
+fig, axis = plot_confusion_matrix(conf_mat=conf_mat_tensor.numpy(),
+                                  class_names=dataset.classes,
+                                  figsize=(10,7)
+                                  )
+fig.show()
