@@ -5,7 +5,7 @@ import torch
 from pathlib import Path
 from torchmetrics import ConfusionMatrix
 from mlxtend.plotting import plot_confusion_matrix
-from typing import Tuple, Dict, List
+from typing import Dict, List
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 from torch import nn
