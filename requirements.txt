@@ -4,3 +4,4 @@ requests
 torchmetrics
 mlxtend
 torchinfo
+ipywidgets
