@@ -214,3 +214,6 @@ helper_functions.py
 
 #Ignore downloaded data
 data/
+
+# Ignore saved models
+*.pth
